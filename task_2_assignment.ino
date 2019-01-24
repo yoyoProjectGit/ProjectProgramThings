@@ -1,21 +1,26 @@
 #include <Wire.h>
 #include <ZumoShield.h>
 #define LED 13
-// this might need to be tuned for different lighting conditions, surfaces, etc.
 #define QTR_THRESHOLD  500 // microseconds
-// these might need to be tuned for different motor types
-#define REVERSE_SPEED     100 // 0 is stopped, 400 is full speed
+#define REVERSE_SPEED     100 // 0 is stopped
 #define TURN_SPEED        100
 #define FORWARD_SPEED     100
 #define REVERSE_DURATION  250 // ms
 #define TURN_DURATION     100 // ms
+#define NUM_SENSORS 6
+int roomnumber = 0;
+int found = 0;
 ZumoBuzzer buzzer;
 ZumoMotors motors;
 Pushbutton button(ZUMO_BUTTON); // pushbutton on pin 12
 bool autoMode = true;
-#define NUM_SENSORS 6
 unsigned int sensor_values[NUM_SENSORS];
 int incomingByte;
+int trigPin = 2;    // Trigger
+int echoPin = 6;    // Echo
+long duration, cm;
+bool checkingRoom = false;
+bool foundObject = false;
 ZumoReflectanceSensorArray sensors(QTR_NO_EMITTER_PIN);
 void manualControls()
  {
@@ -69,6 +74,8 @@ void setup()
   //motors.flipRightMotor(true);
   pinMode(LED, HIGH);
   Serial.begin(9600);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
   waitForButtonAndCountDown();
 }
 
@@ -85,19 +92,107 @@ void loop()
   }
   if (incomingByte == 'C')
   {
+    autoMode = true;
     automaticControls();
   }
   if (incomingByte == 'A')
   {
-    motors.setSpeeds(-TURN_SPEED, TURN_SPEED);
-    delay(1320);
+    roomnumber++;
+    checkingRoom = true;
+    Serial.print("We have entered room number: ");
+    Serial.print(roomnumber);
+    Serial.println(" Location: Left.");
+    while (checkingRoom == true)
+    {
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //turning left into the room
+    delay(850);
+    motors.setSpeeds(100,100); //go into room
+    delay(500);
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //start searching room. 850 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //start searching room. 600 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //start searching room. 350 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //start searching room. 100 ms
+    delay(100);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED,-TURN_SPEED); //start searching other side of room 1700
+    delay(1000);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED,-TURN_SPEED); //start searching other side of room 700
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED,-TURN_SPEED); //start searching other side of room 450
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED,-TURN_SPEED); //start searching other side of room 200
+    delay(200);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //turn back to leave room
+    delay(850);
+    motors.setSpeeds(-100,-100); //reverse out of room
+    delay(500);
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //turn back to direction of corridoor
+    delay(850);
     Stop();
+    }
+
   }
   if (incomingByte == 'D')
   {
-    motors.setSpeeds(TURN_SPEED, -TURN_SPEED);
-    delay(1320);
+    checkingRoom = true;
+    roomnumber++;
+    Serial.print("We have entered room number: ");
+    Serial.print(roomnumber);
+    Serial.println(" Location: Right.");
+    
+    while (checkingRoom == true)
+    {
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //turning left into the room
+    delay(850);
+    motors.setSpeeds(100,100); //go into room
+    delay(500);
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //start searching room. 850 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //start searching room. 600 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //start searching room. 350 ms
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //start searching room. 100 ms
+    delay(100);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED,TURN_SPEED); //start searching other side of room 1700
+    delay(1000);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED,TURN_SPEED); //start searching other side of room 700
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED,TURN_SPEED); //start searching other side of room 450
+    delay(250);
+    CheckIfPerson();
+    motors.setSpeeds(-TURN_SPEED,TURN_SPEED); //start searching other side of room 200
+    delay(200);
+    CheckIfPerson();
+    motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //turn back to leave room
+    delay(850);
+    motors.setSpeeds(-100,-100); //reverse out of room
+    delay(500);
+    motors.setSpeeds(-TURN_SPEED, TURN_SPEED); //turn back to direction of corridoor
+    delay(850);
+    if (found > 0)
+    {
+      Serial.print("We have found an object in room ");
+      Serial.println(roomnumber);
+    }
     Stop();
+    }
   }
 }
 
@@ -108,6 +203,10 @@ void loop()
   {
   sensors.read(sensor_values);
   incomingByte = Serial.read();
+  if (incomingByte == 'F')
+  {
+    autoMode = false;
+  }
   if (sensor_values[0] > QTR_THRESHOLD)
  {
    motors.setSpeeds(100,100);
@@ -119,7 +218,7 @@ void loop()
     motors.setSpeeds(0,0);
     Serial.println("I have reached a wall");
     motors.setSpeeds(-100,-100);
-    delay(500);
+    delay(300);
     motors.setSpeeds(0,0);
     autoMode = false;
     manualControls();
@@ -144,7 +243,7 @@ void loop()
    motors.setSpeeds(0,0);
    Serial.println("I have reached a wall");
    motors.setSpeeds(-100,-100);
-   delay(500);
+   delay(300);
    motors.setSpeeds(0,0);
    autoMode = false;
    manualControls();
@@ -163,15 +262,26 @@ void loop()
   {
     motors.setSpeeds(FORWARD_SPEED, FORWARD_SPEED);
   }
-  if (incomingByte == 'F')
-  {
-    autoMode = false;
-  }
-  }
  }
+}
  void Stop()
  {
+  checkingRoom = false;
   motors.setSpeeds(0,0);
  }
 
-  
+ void CheckIfPerson()
+ {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(5);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  pinMode(echoPin, INPUT);
+  duration = pulseIn(echoPin, HIGH);
+  cm = (duration/2) / 29.1;     // Divide by 29.1 or multiply by 0.0343
+  if(cm < 20)
+  {
+    found++;
+  }
+ }
