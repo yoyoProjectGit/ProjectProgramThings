@@ -8,6 +8,7 @@
 #define REVERSE_DURATION  250 // ms
 #define TURN_DURATION     100 // ms
 #define NUM_SENSORS 6
+
 int roomnumber = 0;
 int found = 0;
 ZumoBuzzer buzzer;
@@ -20,13 +21,14 @@ int trigPin = 2;    // Trigger
 int echoPin = 6;    // Echo
 long duration, cm;
 bool checkingRoom = false;
-bool foundObject = false;
+unsigned long starting, finish, elapsed, starting2, finish2, elapsed2, timeInCorridor;
 ZumoReflectanceSensorArray sensors(QTR_NO_EMITTER_PIN);
 void manualControls()
  {
-  Serial.println("Manual control has been assigned!");
+    Serial.println("Manual control has been assigned!");
     while(autoMode == false)
     {
+      Serial.println("im in here");
     incomingByte = Serial.read();
     if (incomingByte == 'W') {
      motors.setSpeeds(100, 100);
@@ -36,6 +38,15 @@ void manualControls()
     }
      if (incomingByte == 'F') {
       motors.setSpeeds(0, 0);
+    }
+    if (incomingByte == 'E')
+    {
+      elapsed = finish - starting;
+      elapsed2 = finish2 - starting2;
+      timeInCorridor = elapsed - elapsed2;
+      Serial.println(elapsed);
+      Serial.println(elapsed2);
+      Serial.println(timeInCorridor);
     }
      if (incomingByte == 'A') {
     motors.setSpeeds(-100, 100);
@@ -48,7 +59,7 @@ void manualControls()
     if (incomingByte == 'C')
     {
       motors.setSpeeds(0,0);
-      autoMode = true;
+      automaticControls();
     } 
   }
  }
@@ -92,12 +103,13 @@ void loop()
   }
   if (incomingByte == 'C')
   {
-    autoMode = true;
+    //autoMode = true;
     automaticControls();
   }
   if (incomingByte == 'A')
   {
     roomnumber++;
+    starting2 = millis();
     checkingRoom = true;
     Serial.print("We have entered room number: ");
     Serial.print(roomnumber);
@@ -138,14 +150,22 @@ void loop()
     delay(500);
     motors.setSpeeds(TURN_SPEED, -TURN_SPEED); //turn back to direction of corridoor
     delay(850);
+    if (found > 0)
+    {
+      Serial.print("We have found an object in room ");
+      Serial.println(roomnumber);
+      found = 0;
+    }
+    finish2 = millis();
     Stop();
     }
 
   }
   if (incomingByte == 'D')
   {
-    checkingRoom = true;
     roomnumber++;
+    starting2 = millis();
+    checkingRoom = true;
     Serial.print("We have entered room number: ");
     Serial.print(roomnumber);
     Serial.println(" Location: Right.");
@@ -190,7 +210,9 @@ void loop()
     {
       Serial.print("We have found an object in room ");
       Serial.println(roomnumber);
+      found = 0;
     }
+    finish2 = millis();
     Stop();
     }
   }
@@ -198,6 +220,8 @@ void loop()
 
  void automaticControls()
  {
+  starting = millis();
+  autoMode = true;
   Serial.println("Automatic Control started!");
   while (autoMode == true)
   {
@@ -205,7 +229,7 @@ void loop()
   incomingByte = Serial.read();
   if (incomingByte == 'F')
   {
-    autoMode = false;
+    Stop();
   }
   if (sensor_values[0] > QTR_THRESHOLD)
  {
@@ -218,6 +242,7 @@ void loop()
     motors.setSpeeds(0,0);
     Serial.println("I have reached a wall");
     motors.setSpeeds(-100,-100);
+    finish = millis();
     delay(300);
     motors.setSpeeds(0,0);
     autoMode = false;
@@ -243,6 +268,7 @@ void loop()
    motors.setSpeeds(0,0);
    Serial.println("I have reached a wall");
    motors.setSpeeds(-100,-100);
+   finish = millis();
    delay(300);
    motors.setSpeeds(0,0);
    autoMode = false;
@@ -266,8 +292,9 @@ void loop()
 }
  void Stop()
  {
-  checkingRoom = false;
   motors.setSpeeds(0,0);
+  checkingRoom = false;
+  autoMode = false;
  }
 
  void CheckIfPerson()
